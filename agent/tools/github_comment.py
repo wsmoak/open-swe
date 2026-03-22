@@ -7,12 +7,14 @@ from ..utils.github_app import get_github_app_installation_token
 from ..utils.github_comments import post_github_comment
 
 
-def github_comment(message: str, issue_number: int) -> dict[str, Any]:
+def github_comment(message: str, issue_number: int = 0) -> dict[str, Any]:
     """Post a comment to a GitHub issue or pull request."""
     config = get_config()
     configurable = config.get("configurable", {})
 
     repo_config = configurable.get("repo", {})
+    if not issue_number:
+        issue_number = configurable.get("github_issue", {}).get("number")
     if not issue_number:
         return {"success": False, "error": "Missing issue_number argument"}
     if not repo_config:
