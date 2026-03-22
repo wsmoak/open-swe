@@ -8,5 +8,8 @@
   "http": {
     "app": "agent.webapp:app"
   },
-  "env": ".env" 
+  "env": ".env",
+  "dockerfile_lines": [
+    "RUN python -c \"import urllib.request, platform; arch = 'arm64' if platform.machine() == 'aarch64' else 'amd64'; urllib.request.urlretrieve(f'https://github.com/loft-sh/devpod/releases/download/v0.6.5/devpod-linux-{arch}', '/usr/local/bin/devpod')\" && chmod +x /usr/local/bin/devpod"
+  ]
 }

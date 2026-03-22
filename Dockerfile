@@ -4,6 +4,7 @@ ARG DOCKER_CLI_VERSION=5:29.1.5-1~debian.13~trixie
 ARG NODEJS_VERSION=22.22.0-1nodesource1
 ARG UV_VERSION=0.9.26
 ARG YARN_VERSION=4.12.0
+ARG DEVPOD_VERSION=0.6.5
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -61,6 +62,17 @@ ENV PATH=/usr/local/go/bin:/root/.local/bin:/usr/local/bin:/usr/local/sbin:/usr/
 ENV GOPATH=/root/go
 ENV PATH=/root/go/bin:/usr/local/go/bin:/root/.local/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "${arch}" in \
+      amd64) devpod_arch="amd64" ;; \
+      arm64) devpod_arch="arm64" ;; \
+      *) echo "unsupported architecture: ${arch}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/loft-sh/devpod/releases/download/v${DEVPOD_VERSION}/devpod-linux-${devpod_arch}" \
+      -o /usr/local/bin/devpod; \
+    chmod +x /usr/local/bin/devpod
+
 WORKDIR /workspace
 
 RUN echo "=== Installed versions ===" \
@@ -70,4 +82,5 @@ RUN echo "=== Installed versions ===" \
     && yarn --version \
     && go version \
     && docker --version \
-    && git --version
+    && git --version \
+    && devpod version
