@@ -40,16 +40,28 @@ def _ensure_provider(provider: str) -> None:
         return
 
     region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-2"))
-    logger.info("Installing DevPod provider '%s' (region=%s)", provider, region)
-    result = subprocess.run(
-        [
-            "devpod", "provider", "add", provider,
-            "-o", f"AWS_REGION={region}",
-            "-o", f"AWS_AMI={os.getenv('DEVPOD_AWS_AMI', 'ami-096a2911074929e0b')}",
-            "--debug",
-        ],
-        capture_output=True, text=True, timeout=60,
-    )
+    ami = os.getenv("DEVPOD_AWS_AMI", "ami-044f1545c3936f4c7")
+    subnet_id = os.getenv("DEVPOD_AWS_SUBNET_ID", "")
+    vpc_id = os.getenv("DEVPOD_AWS_VPC_ID", "")
+    logger.info("Installing DevPod provider '%s' (region=%s, ami=%s)", provider, region, ami)
+
+    # The default AMI is a copy of Canonical's Ubuntu 22.04 into our AWS account with a
+    # description matching what devpod-provider-aws expects ("Canonical, Ubuntu, 22.04 LTS").
+    # This works around https://github.com/loft-sh/devpod-provider-aws/issues/50 where the
+    # provider's init searches owner:"amazon" instead of Canonical (099720109477) and uses a
+    # description filter that doesn't match real Ubuntu AMIs.
+    # For production, consider using skevetter's fork which fixes this upstream.
+    cmd = [
+        "devpod", "provider", "add", provider,
+        "-o", f"AWS_REGION={region}",
+        "-o", f"AWS_AMI={ami}",
+        "--debug",
+    ]
+    if subnet_id:
+        cmd.extend(["-o", f"AWS_SUBNET_ID={subnet_id}"])
+    if vpc_id:
+        cmd.extend(["-o", f"AWS_VPC_ID={vpc_id}"])
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     logger.info("devpod provider add stdout: %s", result.stdout)
     logger.info("devpod provider add stderr: %s", result.stderr)
     if result.returncode != 0:
@@ -57,7 +69,7 @@ def _ensure_provider(provider: str) -> None:
             f"Failed to add DevPod provider '{provider}': {result.stderr or result.stdout}"
         )
     _provider_installed = True
-    logger.info("DevPod provider '%s' installed", provider)
+    logger.info("DevPod provider '%s' installed and configured", provider)
 
 
 def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
