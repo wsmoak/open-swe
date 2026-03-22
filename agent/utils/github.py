@@ -117,13 +117,16 @@ _CRED_FILE_PATH = "/tmp/.git-credentials"
 
 
 def setup_git_credentials(sandbox_backend: SandboxBackendProtocol, github_token: str) -> None:
-    """Write GitHub credentials to a temporary file using the sandbox write API.
+    """Write GitHub credentials to a file in the sandbox.
 
-    The write API sends content in the HTTP body (not via a shell command),
-    so the token never appears in shell history or process listings.
+    Uses printf via execute() rather than sandbox_backend.write() because
+    write() fails if the file already exists and heredocs may not work
+    reliably through DevPod SSH.
     """
-    sandbox_backend.write(_CRED_FILE_PATH, f"https://git:{github_token}@github.com\n")
-    sandbox_backend.execute(f"chmod 600 {_CRED_FILE_PATH}")
+    cred_line = f"https://git:{github_token}@github.com"
+    sandbox_backend.execute(
+        f"printf '%s\\n' {shlex.quote(cred_line)} > {_CRED_FILE_PATH} && chmod 600 {_CRED_FILE_PATH}"
+    )
 
 
 def cleanup_git_credentials(sandbox_backend: SandboxBackendProtocol) -> None:
@@ -152,10 +155,7 @@ def git_push(
     if not github_token:
         return _run_git(sandbox_backend, repo_dir, f"git push origin {safe_branch}")
     setup_git_credentials(sandbox_backend, github_token)
-    try:
-        return _git_with_credentials(sandbox_backend, repo_dir, f"push origin {safe_branch}")
-    finally:
-        cleanup_git_credentials(sandbox_backend)
+    return _git_with_credentials(sandbox_backend, repo_dir, f"push origin {safe_branch}")
 
 
 async def create_github_pr(

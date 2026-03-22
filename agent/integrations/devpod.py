@@ -72,6 +72,27 @@ def _ensure_provider(provider: str) -> None:
     logger.info("DevPod provider '%s' installed and configured", provider)
 
 
+def _disable_git_credential_injection() -> None:
+    """Disable DevPod's built-in git credential proxy.
+
+    DevPod's credential proxy tunnels git credential requests back to the host
+    machine's credential store. On ECS Fargate there is no credential store,
+    so the proxy fails. We manage credentials ourselves via setup_git_credentials.
+    """
+    result = subprocess.run(
+        ["devpod", "context", "set-options", "default",
+         "-o", "SSH_INJECT_GIT_CREDENTIALS=false"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        logger.warning(
+            "Failed to disable git credential injection: %s",
+            result.stderr or result.stdout,
+        )
+    else:
+        logger.info("Disabled DevPod git credential injection")
+
+
 def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
     """Create or reconnect to a DevPod workspace sandbox.
 
@@ -91,6 +112,13 @@ def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
     if sandbox_id:
         logger.info("Reconnecting to existing DevPod workspace: %s", sandbox_id)
         backend = DevPodBackend(workspace_name=sandbox_id)
+        # Verify the workspace is actually reachable
+        result = backend.execute("echo ok")
+        if result.exit_code != 0 or "ok" not in result.output:
+            raise RuntimeError(
+                f"DevPod workspace '{sandbox_id}' is not reachable (exit_code={result.exit_code})"
+            )
+        logger.info("DevPod workspace '%s' is alive", sandbox_id)
         return backend
 
     provider = os.getenv("DEVPOD_PROVIDER", DEFAULT_DEVPOD_PROVIDER)
@@ -108,6 +136,7 @@ def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
     )
 
     _ensure_provider(provider)
+    _disable_git_credential_injection()
     workspace_name = _generate_workspace_name()
 
     logger.info(

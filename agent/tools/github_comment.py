@@ -1,10 +1,13 @@
 import asyncio
+import logging
 from typing import Any
 
 from langgraph.config import get_config
 
 from ..utils.github_app import get_github_app_installation_token
 from ..utils.github_comments import post_github_comment
+
+logger = logging.getLogger(__name__)
 
 
 def github_comment(message: str, issue_number: int = 0) -> dict[str, Any]:
@@ -13,8 +16,15 @@ def github_comment(message: str, issue_number: int = 0) -> dict[str, Any]:
     configurable = config.get("configurable", {})
 
     repo_config = configurable.get("repo", {})
-    if not issue_number:
-        issue_number = configurable.get("github_issue", {}).get("number")
+    # Always prefer the issue number from config (set by the webhook handler)
+    # over the LLM-provided argument, which may be wrong.
+    config_issue_number = configurable.get("github_issue", {}).get("number")
+    logger.info(
+        "github_comment: LLM issue_number=%s, config issue_number=%s, configurable keys=%s",
+        issue_number, config_issue_number, list(configurable.keys()),
+    )
+    if config_issue_number:
+        issue_number = config_issue_number
     if not issue_number:
         return {"success": False, "error": "Missing issue_number argument"}
     if not repo_config:

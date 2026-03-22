@@ -54,7 +54,6 @@ SANDBOX_POLL_INTERVAL = 1.0
 from .utils.agents_md import read_agents_md_in_sandbox
 from .utils.github import (
     _CRED_FILE_PATH,
-    cleanup_git_credentials,
     git_has_uncommitted_changes,
     is_valid_git_repo,
     remove_directory,
@@ -93,7 +92,6 @@ async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
     work_dir = await aresolve_sandbox_work_dir(sandbox_backend)
     repo_dir = await aresolve_repo_dir(sandbox_backend, repo)
     clean_url = f"https://github.com/{owner}/{repo}.git"
-    cred_helper_arg = f"-c credential.helper='store --file={_CRED_FILE_PATH}'"
     safe_repo_dir = shlex.quote(repo_dir)
     safe_clean_url = shlex.quote(clean_url)
 
@@ -126,11 +124,17 @@ async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
         logger.info("Repo is clean, pulling latest changes from %s/%s", owner, repo)
 
         await loop.run_in_executor(None, setup_git_credentials, sandbox_backend, token)
+        for scope in ("--global", "--system"):
+            await loop.run_in_executor(
+                None,
+                sandbox_backend.execute,
+                f"git config {scope} credential.helper 'store --file={_CRED_FILE_PATH}'",
+            )
         try:
             pull_result = await loop.run_in_executor(
                 None,
                 sandbox_backend.execute,
-                f"cd {repo_dir} && git {cred_helper_arg} pull origin $(git rev-parse --abbrev-ref HEAD)",
+                f"cd {repo_dir} && git pull origin $(git rev-parse --abbrev-ref HEAD)",
             )
             logger.debug("Git pull result: exit_code=%s", pull_result.exit_code)
             if pull_result.exit_code != 0:
@@ -142,31 +146,48 @@ async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
         except Exception:
             logger.exception("Failed to execute git pull")
             raise
-        finally:
-            await loop.run_in_executor(None, cleanup_git_credentials, sandbox_backend)
 
         logger.info("Repo updated at %s", repo_dir)
         return repo_dir
 
     logger.info("Cloning repo %s/%s to %s", owner, repo, repo_dir)
     await loop.run_in_executor(None, setup_git_credentials, sandbox_backend, token)
+    # Set credential helper at both global and system level for robustness
+    for scope in ("--global", "--system"):
+        await loop.run_in_executor(
+            None,
+            sandbox_backend.execute,
+            f"git config {scope} credential.helper 'store --file={_CRED_FILE_PATH}'",
+        )
+    # Verify credential setup
+    diag = await loop.run_in_executor(
+        None,
+        sandbox_backend.execute,
+        f"echo 'HOME='$HOME && echo 'USER='$(whoami) && ls -la {_CRED_FILE_PATH} && git config --list --show-origin | grep credential",
+    )
+    logger.info("Credential setup diagnostics: %s", diag.output[:500])
     try:
         result = await loop.run_in_executor(
             None,
             sandbox_backend.execute,
-            f"git {cred_helper_arg} clone {safe_clean_url} {safe_repo_dir}",
+            f"git clone {safe_clean_url} {safe_repo_dir}",
         )
         logger.debug("Git clone result: exit_code=%s", result.exit_code)
     except Exception:
         logger.exception("Failed to execute git clone")
         raise
-    finally:
-        await loop.run_in_executor(None, cleanup_git_credentials, sandbox_backend)
 
     if result.exit_code != 0:
         msg = f"Failed to clone repo {owner}/{repo}: {result.output}"
         logger.error(msg)
         raise RuntimeError(msg)
+
+    # Override DevPod's built-in credential helper at the repo level
+    await loop.run_in_executor(
+        None,
+        sandbox_backend.execute,
+        f"cd {safe_repo_dir} && git config credential.helper 'store --file={_CRED_FILE_PATH}'",
+    )
 
     logger.info("Repo cloned successfully at %s", repo_dir)
     return repo_dir
@@ -272,7 +293,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
                 repo_dir = await _clone_or_pull_repo_in_sandbox(
                     sandbox_backend, repo_owner, repo_name, github_token
                 )
-            except SandboxClientError:
+            except (SandboxClientError, RuntimeError):
                 logger.warning(
                     "Cached sandbox is no longer reachable for thread %s, recreating sandbox",
                     thread_id,
@@ -280,9 +301,6 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
                 sandbox_backend, repo_dir = await _recreate_sandbox(
                     thread_id, repo_owner, repo_name, github_token=github_token
                 )
-            except Exception:
-                logger.exception("Failed to pull repo in cached sandbox")
-                raise
 
     elif sandbox_id is None:
         logger.info("Creating new sandbox for thread %s", thread_id)
@@ -344,7 +362,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
                 repo_dir = await _clone_or_pull_repo_in_sandbox(
                     sandbox_backend, repo_owner, repo_name, github_token
                 )
-            except SandboxClientError:
+            except (SandboxClientError, RuntimeError):
                 logger.warning(
                     "Existing sandbox is no longer reachable for thread %s, recreating sandbox",
                     thread_id,
@@ -352,9 +370,6 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
                 sandbox_backend, repo_dir = await _recreate_sandbox(
                     thread_id, repo_owner, repo_name, github_token=github_token
                 )
-            except Exception:
-                logger.exception("Failed to pull repo in existing sandbox")
-                raise
 
     SANDBOX_BACKENDS[thread_id] = sandbox_backend
 

@@ -237,6 +237,8 @@ When you have completed your implementation, follow these steps in order:
 
 **IMPORTANT: Even if you made commits directly via `git commit` or `git revert` in the sandbox, you MUST still call `commit_and_open_pr` to push those commits to GitHub. Never report the work as done without pushing.**
 
+**IMPORTANT: NEVER run `git push` directly via the `execute` tool. The sandbox does not have git credentials configured for direct shell access. The `commit_and_open_pr` tool handles authentication internally and is the ONLY way to push code. If you need to push, call `commit_and_open_pr`.**
+
 **IMPORTANT: Never claim a PR was created or updated unless `commit_and_open_pr` returned `success` and a PR link. If it returns "No changes detected" or any error, report that instead.**
 
 4. **Notify the source** immediately after `commit_and_open_pr` succeeds. Include a brief summary and the PR link:
