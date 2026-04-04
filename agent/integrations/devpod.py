@@ -48,6 +48,27 @@ def _is_workspace_unreachable(*parts: str | bytes | None) -> bool:
     return any(snippet in text for snippet in _UNREACHABLE_ERROR_SNIPPETS)
 
 
+def _fetch_fargate_credentials() -> dict | None:
+    """Fetch temporary AWS credentials from the Fargate container credential endpoint."""
+    import urllib.request
+
+    relative_uri = os.getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
+    if not relative_uri:
+        logger.debug("No AWS_CONTAINER_CREDENTIALS_RELATIVE_URI set, skipping Fargate credential fetch")
+        return None
+
+    url = f"http://169.254.170.2{relative_uri}"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            import json
+            creds = json.loads(resp.read())
+            logger.info("Fetched Fargate credentials (AccessKeyId=%s...)", creds.get("AccessKeyId", "")[:8])
+            return creds
+    except Exception:
+        logger.exception("Failed to fetch Fargate credentials from %s", url)
+        return None
+
+
 def _ensure_provider(provider: str) -> None:
     """Install the DevPod provider if not already present."""
     global _provider_installed  # noqa: PLW0603
@@ -71,6 +92,15 @@ def _ensure_provider(provider: str) -> None:
     access_key_id = os.getenv("AWS_ACCESS_KEY_ID", "")
     secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     session_token = os.getenv("AWS_SESSION_TOKEN", "")
+
+    # On Fargate, credentials come from the container credential endpoint,
+    # not environment variables. Fetch them so we can pass to DevPod.
+    if not access_key_id:
+        creds = _fetch_fargate_credentials()
+        if creds:
+            access_key_id = creds.get("AccessKeyId", "")
+            secret_access_key = creds.get("SecretAccessKey", "")
+            session_token = creds.get("Token", "")
     logger.info("Installing DevPod provider '%s' (region=%s, ami=%s)", provider, region, ami)
 
     # The default AMI is a copy of Canonical's Ubuntu 22.04 into our AWS account with a
