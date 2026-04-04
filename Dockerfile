@@ -4,7 +4,7 @@ ARG DOCKER_CLI_VERSION=5:29.1.5-1~debian.13~trixie
 ARG NODEJS_VERSION=22.22.0-1nodesource1
 ARG UV_VERSION=0.9.26
 ARG YARN_VERSION=4.12.0
-ARG DEVPOD_VERSION=0.6.15
+ARG DEVPOD_VERSION=0.18.2
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -70,7 +70,7 @@ RUN set -eux; \
       arm64) devpod_arch="arm64" ;; \
       *) echo "unsupported architecture: ${arch}" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL "https://github.com/loft-sh/devpod/releases/download/v${DEVPOD_VERSION}/devpod-linux-${devpod_arch}" \
+    curl -fsSL "https://github.com/skevetter/devpod/releases/download/v${DEVPOD_VERSION}/devpod-linux-${devpod_arch}" \
       -o /usr/local/bin/devpod; \
     chmod +x /usr/local/bin/devpod
 
