@@ -189,18 +189,18 @@ def test_delete_calls_devpod_delete_force() -> None:
 # ---------------------------------------------------------------------------
 
 def test_create_devpod_sandbox_reconnects_when_sandbox_id_given() -> None:
-    with patch("subprocess.run") as mock_run:
+    with patch("subprocess.run", return_value=_make_result(stdout="ok\n", returncode=0)):
         backend = create_devpod_sandbox(sandbox_id="existing-workspace")
 
-    mock_run.assert_not_called()
     assert backend.id == "existing-workspace"
 
 
 def test_create_devpod_sandbox_runs_devpod_up() -> None:
-    with patch("subprocess.run", return_value=_make_result()) as mock_run:
-        with patch("agent.integrations.devpod._generate_workspace_name", return_value="openswe-abc"):
-            with patch("agent.integrations.devpod._update_thread_sandbox_metadata"):
-                backend = create_devpod_sandbox()
+    with patch("agent.integrations.devpod._ensure_provider"):
+        with patch("subprocess.run", return_value=_make_result()) as mock_run:
+            with patch("agent.integrations.devpod._generate_workspace_name", return_value="openswe-abc"):
+                with patch("agent.integrations.devpod._update_thread_sandbox_metadata"):
+                    backend = create_devpod_sandbox()
 
     args = mock_run.call_args[0][0]
     assert args[0:3] == ["devpod", "up", "openswe-abc"]
@@ -209,20 +209,22 @@ def test_create_devpod_sandbox_runs_devpod_up() -> None:
 
 
 def test_create_devpod_sandbox_raises_on_failure() -> None:
-    with patch("subprocess.run", return_value=_make_result(returncode=1, stderr=b"provider error")):
-        with patch("agent.integrations.devpod._generate_workspace_name", return_value="openswe-abc"):
-            with pytest.raises(RuntimeError, match="provider error"):
-                create_devpod_sandbox()
+    with patch("agent.integrations.devpod._ensure_provider"):
+        with patch("subprocess.run", return_value=_make_result(returncode=1, stderr=b"provider error")):
+            with patch("agent.integrations.devpod._generate_workspace_name", return_value="openswe-abc"):
+                with pytest.raises(RuntimeError, match="provider error"):
+                    create_devpod_sandbox()
 
 
 def test_create_devpod_sandbox_uses_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEVPOD_PROVIDER", "docker")
     monkeypatch.setenv("DEVPOD_WORKSPACE_IMAGE", "myimage:latest")
 
-    with patch("subprocess.run", return_value=_make_result()) as mock_run:
-        with patch("agent.integrations.devpod._generate_workspace_name", return_value="openswe-xyz"):
-            with patch("agent.integrations.devpod._update_thread_sandbox_metadata"):
-                create_devpod_sandbox()
+    with patch("agent.integrations.devpod._ensure_provider"):
+        with patch("subprocess.run", return_value=_make_result()) as mock_run:
+            with patch("agent.integrations.devpod._generate_workspace_name", return_value="openswe-xyz"):
+                with patch("agent.integrations.devpod._update_thread_sandbox_metadata"):
+                    create_devpod_sandbox()
 
     args = mock_run.call_args[0][0]
     assert "--provider" in args

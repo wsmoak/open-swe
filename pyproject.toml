@@ -3,7 +3,7 @@ name = "open-swe-agent"
 version = "0.1.0"
 description = "Open SWE Agent - Python agent for automating software engineering tasks"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
     "deepagents>=0.4.3",
@@ -17,7 +17,7 @@ dependencies = [
     "langgraph>=1.0.8",
     "markdownify>=1.2.2",
     "langchain-anthropic>1.1.0",
-    "langgraph-cli[inmem]>=0.4.12",
+    "aegra-cli>=0.8.0",
     "langsmith>=0.7.1",
     "langchain-openai==1.1.10",
     "langchain-daytona>=0.0.3",
@@ -44,7 +44,7 @@ packages = ["agent"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [

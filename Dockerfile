@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     jq \
     unzip \
     zip \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN install -m 0755 -d /etc/apt/keyrings \
@@ -73,7 +74,17 @@ RUN set -eux; \
       -o /usr/local/bin/devpod; \
     chmod +x /usr/local/bin/devpod
 
-WORKDIR /workspace
+WORKDIR /app
+
+# Copy dependency files first for layer caching
+COPY pyproject.toml uv.lock* README.md ./
+
+# Install Python dependencies
+RUN uv pip install --system --compile-bytecode .
+
+# Copy agent code and config
+COPY agent/ ./agent/
+COPY aegra.json ./
 
 RUN echo "=== Installed versions ===" \
     && python --version \
@@ -83,4 +94,9 @@ RUN echo "=== Installed versions ===" \
     && go version \
     && docker --version \
     && git --version \
-    && devpod version
+    && devpod version \
+    && aegra version
+
+EXPOSE 2026
+
+CMD ["aegra", "serve", "--host", "0.0.0.0", "--port", "2026"]

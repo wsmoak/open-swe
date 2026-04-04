@@ -8,7 +8,7 @@ all: help
 ######################
 
 dev:
-	langgraph dev
+	aegra dev
 
 run:
 	uvicorn agent.webapp:app --reload --port 8000
