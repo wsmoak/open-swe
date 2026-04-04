@@ -26,14 +26,14 @@ from deepagents import create_deep_agent
 from deepagents.backends.protocol import SandboxBackendProtocol
 from langsmith.sandbox import SandboxClientError
 
-from .middleware import (
+from agent.middleware import (
     ToolErrorMiddleware,
     check_message_queue_before_model,
     ensure_no_empty_msg,
     open_pr_if_needed,
 )
-from .prompt import construct_system_prompt
-from .tools import (
+from agent.prompt import construct_system_prompt
+from agent.tools import (
     commit_and_open_pr,
     fetch_url,
     github_comment,
@@ -41,9 +41,9 @@ from .tools import (
     linear_comment,
     slack_thread_reply,
 )
-from .utils.auth import resolve_github_token
-from .utils.model import make_model
-from .utils.sandbox import create_sandbox
+from agent.utils.auth import resolve_github_token
+from agent.utils.model import make_model
+from agent.utils.sandbox import create_sandbox
 
 client = get_client()
 
@@ -51,16 +51,16 @@ SANDBOX_CREATING = "__creating__"
 SANDBOX_CREATION_TIMEOUT = 180
 SANDBOX_POLL_INTERVAL = 1.0
 
-from .utils.agents_md import read_agents_md_in_sandbox
-from .utils.github import (
+from agent.utils.agents_md import read_agents_md_in_sandbox
+from agent.utils.github import (
     _CRED_FILE_PATH,
     git_has_uncommitted_changes,
     is_valid_git_repo,
     remove_directory,
     setup_git_credentials,
 )
-from .utils.sandbox_paths import aresolve_repo_dir, aresolve_sandbox_work_dir
-from .utils.sandbox_state import SANDBOX_BACKENDS, get_sandbox_id_from_metadata
+from agent.utils.sandbox_paths import aresolve_repo_dir, aresolve_sandbox_work_dir
+from agent.utils.sandbox_state import SANDBOX_BACKENDS, get_sandbox_id_from_metadata
 
 
 async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
