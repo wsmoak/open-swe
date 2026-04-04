@@ -650,6 +650,7 @@ async def process_linear_issue(  # noqa: PLR0912, PLR0915
         linear_issue_number = parts[1]
 
     configurable: dict[str, Any] = {
+        "__is_for_execution__": True,
         "repo": repo_config,
         "linear_issue": {
             "id": issue_id,
@@ -1178,6 +1179,7 @@ async def _trigger_or_queue_run(
         input={"messages": [{"role": "user", "content": prompt}]},
         config={
             "configurable": {
+                "__is_for_execution__": True,
                 "source": "github",
                 "github_login": github_login,
                 "repo": repo_config,
@@ -1383,6 +1385,7 @@ async def process_github_issue(payload: dict[str, Any], event_type: str) -> None
             issue_author=issue_author,
         )
     configurable: dict[str, Any] = {
+        "__is_for_execution__": True,
         "source": "github",
         "github_login": github_login,
         "repo": repo_config,
