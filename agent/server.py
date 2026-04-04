@@ -265,8 +265,8 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
     repo_owner = repo_config.get("owner")
     repo_name = repo_config.get("name")
 
-    if thread_id is None or not graph_loaded_for_execution(config):
-        logger.info("No thread_id or not for execution, returning agent without sandbox")
+    if thread_id is None:
+        logger.info("No thread_id, returning agent without sandbox")
         return create_deep_agent(
             system_prompt="",
             tools=[],
