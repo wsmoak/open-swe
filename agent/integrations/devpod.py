@@ -48,6 +48,19 @@ def _is_workspace_unreachable(*parts: str | bytes | None) -> bool:
     return any(snippet in text for snippet in _UNREACHABLE_ERROR_SNIPPETS)
 
 
+def _ensure_aws_config(region: str) -> None:
+    """Create a minimal ~/.aws/config so the AWS Go SDK can resolve [default]."""
+    import pathlib
+
+    aws_dir = pathlib.Path.home() / ".aws"
+    config_file = aws_dir / "config"
+    if config_file.exists():
+        return
+    aws_dir.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(f"[default]\nregion = {region}\n")
+    logger.info("Created minimal %s for AWS SDK shared config", config_file)
+
+
 def _fetch_fargate_credentials() -> dict | None:
     """Fetch temporary AWS credentials from the Fargate container credential endpoint."""
     import urllib.request
@@ -139,6 +152,11 @@ def _ensure_provider(provider: str) -> None:
         env["AWS_SECRET_ACCESS_KEY"] = secret_access_key
     if session_token:
         env["AWS_SESSION_TOKEN"] = session_token
+    # The AWS Go SDK's LoadDefaultConfig expects ~/.aws/config to exist when
+    # resolving the [default] profile. On Fargate there is no config file,
+    # causing "failed to get shared config profile, default". Create a
+    # minimal one so the SDK is satisfied.
+    _ensure_aws_config(region)
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
     logger.info("devpod provider add stdout: %s", result.stdout)
     logger.info("devpod provider add stderr: %s", result.stderr)
