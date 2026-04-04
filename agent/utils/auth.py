@@ -44,12 +44,16 @@ logger.debug(
 def is_bot_token_only_mode() -> bool:
     """Check if we're in bot-token-only mode.
 
-    This is the case when LANGSMITH_API_KEY_PROD is set (deployed) but neither
-    X_SERVICE_AUTH_JWT_SECRET nor USER_ID_API_KEY_MAP is configured, meaning we
-    can't resolve per-user GitHub OAuth tokens. In this mode the GitHub App
-    installation token is used for all git operations instead.
+    Returns True when per-user GitHub OAuth tokens cannot be resolved:
+    - Original LangSmith case: LANGSMITH_API_KEY_PROD is set but neither
+      X_SERVICE_AUTH_JWT_SECRET nor USER_ID_API_KEY_MAP is configured.
+    - Aegra/DevPod case: LANGSMITH_API_KEY_PROD is not set at all, so
+      LangSmith-based auth is unavailable.
+
+    In this mode the GitHub App installation token is used for all git
+    operations instead.
     """
-    return bool(LANGSMITH_API_KEY and not X_SERVICE_AUTH_JWT_SECRET and not USER_ID_API_KEY_MAP)
+    return not X_SERVICE_AUTH_JWT_SECRET and not USER_ID_API_KEY_MAP
 
 
 def _retry_instruction(source: str) -> str:
@@ -373,7 +377,16 @@ async def resolve_github_token(config: RunnableConfig, thread_id: str) -> tuple[
     Raises:
         RuntimeError: If source is missing or token resolution fails.
     """
-    if is_bot_token_only_mode():
+    bot_mode = is_bot_token_only_mode()
+    logger.info(
+        "resolve_github_token: thread_id=%s, bot_token_only_mode=%s, "
+        "LANGSMITH_API_KEY_PROD=%s, X_SERVICE_AUTH_JWT_SECRET=%s, USER_ID_API_KEY_MAP=%s",
+        thread_id, bot_mode,
+        "set" if LANGSMITH_API_KEY else "missing",
+        "set" if X_SERVICE_AUTH_JWT_SECRET else "missing",
+        "set" if USER_ID_API_KEY_MAP else "missing",
+    )
+    if bot_mode:
         return await _resolve_bot_installation_token(thread_id)
 
     configurable = config["configurable"]

@@ -651,6 +651,7 @@ async def process_linear_issue(  # noqa: PLR0912, PLR0915
 
     configurable: dict[str, Any] = {
         "__is_for_execution__": True,
+        "thread_id": thread_id,
         "repo": repo_config,
         "linear_issue": {
             "id": issue_id,
@@ -793,6 +794,7 @@ async def process_slack_mention(event_data: dict[str, Any], repo_config: dict[st
     content_blocks: list[dict[str, Any]] = [create_text_block(prompt)]
 
     configurable: dict[str, Any] = {
+        "thread_id": thread_id,
         "repo": repo_config,
         "slack_thread": {
             "channel_id": channel_id,
@@ -1180,6 +1182,7 @@ async def _trigger_or_queue_run(
         config={
             "configurable": {
                 "__is_for_execution__": True,
+                "thread_id": thread_id,
                 "source": "github",
                 "github_login": github_login,
                 "repo": repo_config,
@@ -1386,6 +1389,7 @@ async def process_github_issue(payload: dict[str, Any], event_type: str) -> None
         )
     configurable: dict[str, Any] = {
         "__is_for_execution__": True,
+        "thread_id": thread_id,
         "source": "github",
         "github_login": github_login,
         "repo": repo_config,

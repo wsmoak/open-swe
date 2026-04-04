@@ -258,6 +258,11 @@ DEFAULT_RECURSION_LIMIT = 1_000
 async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
     """Get or create an agent with a sandbox for the given thread."""
     thread_id = config["configurable"].get("thread_id", None)
+    configurable_keys = list(config.get("configurable", {}).keys())
+    logger.info(
+        "get_agent called: thread_id=%s, configurable_keys=%s",
+        thread_id, configurable_keys
+    )
 
     config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
 
@@ -266,7 +271,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
     repo_name = repo_config.get("name")
 
     if thread_id is None:
-        logger.info("No thread_id, returning agent without sandbox")
+        logger.info("No thread_id (likely schema extraction), returning minimal agent")
         return create_deep_agent(
             system_prompt="",
             tools=[],
