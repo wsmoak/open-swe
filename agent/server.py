@@ -25,7 +25,6 @@ warnings.filterwarnings("ignore", message=".*Pydantic V1.*", category=UserWarnin
 # Now safe to import agent (which imports LangChain modules)
 from deepagents import create_deep_agent
 from deepagents.backends.protocol import SandboxBackendProtocol
-from langsmith.sandbox import SandboxClientError
 
 from agent.middleware import (
     ToolErrorMiddleware,
@@ -45,6 +44,7 @@ from agent.tools import (
 from agent.utils.auth import resolve_github_token
 from agent.utils.model import make_model
 from agent.utils.sandbox import create_sandbox
+from agent.utils.sandbox_errors import SandboxUnavailableError
 
 _LANGGRAPH_URL = os.environ.get("LANGGRAPH_URL", "http://localhost:2026")
 client = get_client(url=_LANGGRAPH_URL)
@@ -300,7 +300,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
                 repo_dir = await _clone_or_pull_repo_in_sandbox(
                     sandbox_backend, repo_owner, repo_name, github_token
                 )
-            except (SandboxClientError, RuntimeError):
+            except SandboxUnavailableError:
                 logger.warning(
                     "Cached sandbox is no longer reachable for thread %s, recreating sandbox",
                     thread_id,
@@ -369,7 +369,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
                 repo_dir = await _clone_or_pull_repo_in_sandbox(
                     sandbox_backend, repo_owner, repo_name, github_token
                 )
-            except (SandboxClientError, RuntimeError):
+            except SandboxUnavailableError:
                 logger.warning(
                     "Existing sandbox is no longer reachable for thread %s, recreating sandbox",
                     thread_id,

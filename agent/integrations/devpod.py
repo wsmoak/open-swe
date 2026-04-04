@@ -14,6 +14,7 @@ from deepagents.backends.protocol import (
     FileUploadResponse,
 )
 from deepagents.backends.sandbox import BaseSandbox
+from agent.utils.sandbox_errors import SandboxUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,30 @@ DEFAULT_DEVPOD_IMAGE = "bracelangchain/deepagents-sandbox:v1"
 DEFAULT_DEVPOD_PROVIDER = "aws"
 DEVPOD_UP_TIMEOUT = 300  # 5 minutes for workspace creation
 _provider_installed = False
+
+_UNREACHABLE_ERROR_SNIPPETS = (
+    "agent is not running",
+    "workspace doesn't exist",
+    "workspace does not exist",
+    "unable to find",
+    "no such host",
+    "no route to host",
+    "network is unreachable",
+    "connection refused",
+    "connection timed out",
+    "i/o timeout",
+    "broken pipe",
+    "use of closed network connection",
+)
+
+
+def _is_workspace_unreachable(*parts: str | bytes | None) -> bool:
+    """Best-effort detection for DevPod connection-level failures."""
+    text = " ".join(
+        part.decode(errors="ignore") if isinstance(part, bytes) else str(part or "")
+        for part in parts
+    ).lower()
+    return any(snippet in text for snippet in _UNREACHABLE_ERROR_SNIPPETS)
 
 
 def _ensure_provider(provider: str) -> None:
@@ -115,7 +140,7 @@ def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
         # Verify the workspace is actually reachable
         result = backend.execute("echo ok")
         if result.exit_code != 0 or "ok" not in result.output:
-            raise RuntimeError(
+            raise SandboxUnavailableError(
                 f"DevPod workspace '{sandbox_id}' is not reachable (exit_code={result.exit_code})"
             )
         logger.info("DevPod workspace '%s' is alive", sandbox_id)
@@ -248,6 +273,12 @@ class DevPodBackend(BaseSandbox):
             text=True,
             timeout=effective_timeout,
         )
+
+        if _is_workspace_unreachable(result.stdout, result.stderr):
+            raise SandboxUnavailableError(
+                f"DevPod workspace '{self._workspace_name}' is no longer reachable: "
+                f"{(result.stderr or result.stdout or '').strip()}"
+            )
 
         # result.stderr contains only DevPod's own status messages — ignore it.
         return ExecuteResponse(

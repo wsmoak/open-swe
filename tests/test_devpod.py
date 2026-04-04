@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agent.integrations.devpod import DevPodBackend, create_devpod_sandbox
+from agent.utils.sandbox_errors import SandboxUnavailableError
 
 
 def _make_result(returncode: int = 0, stdout: bytes = b"", stderr: bytes = b"") -> MagicMock:
@@ -65,6 +66,16 @@ def test_execute_uses_default_timeout_when_none() -> None:
         backend.execute("echo hi")
 
     assert mock_run.call_args[1]["timeout"] == backend._default_timeout
+
+
+def test_execute_raises_sandbox_unavailable_for_dead_workspace() -> None:
+    result = _make_result(returncode=1)
+    result.stdout = ""
+    result.stderr = "agent is not running"
+    with patch("subprocess.run", return_value=result):
+        backend = DevPodBackend("ws")
+        with pytest.raises(SandboxUnavailableError, match="no longer reachable"):
+            backend.execute("echo hi")
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +204,13 @@ def test_create_devpod_sandbox_reconnects_when_sandbox_id_given() -> None:
         backend = create_devpod_sandbox(sandbox_id="existing-workspace")
 
     assert backend.id == "existing-workspace"
+
+
+def test_create_devpod_sandbox_reconnect_raises_sandbox_unavailable() -> None:
+    result = _make_result(returncode=1, stdout="", stderr="workspace doesn't exist")
+    with patch("subprocess.run", return_value=result):
+        with pytest.raises(SandboxUnavailableError, match="no longer reachable"):
+            create_devpod_sandbox(sandbox_id="existing-workspace")
 
 
 def test_create_devpod_sandbox_runs_devpod_up() -> None:
