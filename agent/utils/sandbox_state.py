@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any
 
 from langgraph_sdk import get_client
@@ -15,7 +16,8 @@ logger = logging.getLogger(__name__)
 # Thread ID -> SandboxBackend mapping, shared between server.py and middleware
 SANDBOX_BACKENDS: dict[str, Any] = {}
 
-client = get_client(url="http://localhost:2026")
+_LANGGRAPH_URL = os.environ.get("LANGGRAPH_URL", "http://localhost:2026")
+client = get_client(url=_LANGGRAPH_URL)
 
 
 async def get_sandbox_id_from_metadata(thread_id: str) -> str | None:

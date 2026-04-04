@@ -4,6 +4,7 @@
 # Suppress deprecation warnings from langchain_core (e.g., Pydantic V1 on Python 3.14+)
 # ruff: noqa: E402
 import logging
+import os
 import shlex
 import warnings
 
@@ -45,7 +46,8 @@ from agent.utils.auth import resolve_github_token
 from agent.utils.model import make_model
 from agent.utils.sandbox import create_sandbox
 
-client = get_client(url="http://localhost:2026")
+_LANGGRAPH_URL = os.environ.get("LANGGRAPH_URL", "http://localhost:2026")
+client = get_client(url=_LANGGRAPH_URL)
 
 SANDBOX_CREATING = "__creating__"
 SANDBOX_CREATION_TIMEOUT = 180

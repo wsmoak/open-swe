@@ -84,7 +84,7 @@ def _update_thread_sandbox_metadata(sandbox_id: str) -> None:
         thread_id = config.get("configurable", {}).get("thread_id")
         if not thread_id:
             return
-        client = get_client(url="http://localhost:2026")
+        client = get_client(url=os.environ.get("LANGGRAPH_URL", "http://localhost:2026"))
 
         async def _update() -> None:
             await client.threads.update(

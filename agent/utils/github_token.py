@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from langgraph.config import get_config
@@ -15,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 _GITHUB_TOKEN_METADATA_KEY = "github_token_encrypted"
 
-client = get_client(url="http://localhost:2026")
+_LANGGRAPH_URL = os.environ.get("LANGGRAPH_URL", "http://localhost:2026")
+client = get_client(url=_LANGGRAPH_URL)
 
 
 def _read_encrypted_github_token(metadata: dict[str, Any]) -> str | None:
