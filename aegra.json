@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "agent": "agent.server:get_agent"
+    "agent": "./agent/server.py:get_agent"
   },
   "http": {
     "app": "agent.webapp:app"
