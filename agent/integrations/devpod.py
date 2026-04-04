@@ -101,7 +101,10 @@ def _ensure_provider(provider: str) -> None:
             access_key_id = creds.get("AccessKeyId", "")
             secret_access_key = creds.get("SecretAccessKey", "")
             session_token = creds.get("Token", "")
-    logger.info("Installing DevPod provider '%s' (region=%s, ami=%s)", provider, region, ami)
+    logger.info(
+        "Installing DevPod provider '%s' (region=%s, ami=%s, creds=%s)",
+        provider, region, ami, "set" if access_key_id else "unset",
+    )
 
     # The default AMI is a copy of Canonical's Ubuntu 22.04 into our AWS account with a
     # description matching what devpod-provider-aws expects ("Canonical, Ubuntu, 22.04 LTS").
@@ -119,15 +122,24 @@ def _ensure_provider(provider: str) -> None:
         cmd.extend(["-o", f"AWS_SUBNET_ID={subnet_id}"])
     if vpc_id:
         cmd.extend(["-o", f"AWS_VPC_ID={vpc_id}"])
-    # Pass AWS credentials as provider options so the provider init can call
-    # the AWS API without needing ~/.aws/config (which doesn't exist on Fargate).
+    # Pass credentials both as -o options (stored in provider config for later
+    # use by devpod up/ssh) AND in the subprocess environment (so the provider's
+    # init command can resolve them via its shell command:
+    #   command: printf "%s" "${AWS_ACCESS_KEY_ID:-}"
+    # which reads from the process environment, not from stored options).
     if access_key_id:
         cmd.extend(["-o", f"AWS_ACCESS_KEY_ID={access_key_id}"])
     if secret_access_key:
         cmd.extend(["-o", f"AWS_SECRET_ACCESS_KEY={secret_access_key}"])
     if session_token:
         cmd.extend(["-o", f"AWS_SESSION_TOKEN={session_token}"])
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    env = os.environ.copy()
+    if access_key_id:
+        env["AWS_ACCESS_KEY_ID"] = access_key_id
+        env["AWS_SECRET_ACCESS_KEY"] = secret_access_key
+    if session_token:
+        env["AWS_SESSION_TOKEN"] = session_token
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
     logger.info("devpod provider add stdout: %s", result.stdout)
     logger.info("devpod provider add stderr: %s", result.stderr)
     if result.returncode != 0:
