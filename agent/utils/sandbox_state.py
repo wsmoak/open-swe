@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
-from langgraph.config import get_config
+from langgraph_sdk import get_client
 
 from .sandbox import create_sandbox
 
@@ -15,15 +15,17 @@ logger = logging.getLogger(__name__)
 # Thread ID -> SandboxBackend mapping, shared between server.py and middleware
 SANDBOX_BACKENDS: dict[str, Any] = {}
 
+client = get_client(url="http://localhost:2026")
+
 
 async def get_sandbox_id_from_metadata(thread_id: str) -> str | None:
-    """Fetch sandbox_id from thread metadata."""
+    """Fetch sandbox_id from thread metadata via the API."""
     try:
-        config = get_config()
+        thread = await client.threads.get(thread_id)
+        return thread.get("metadata", {}).get("sandbox_id")
     except Exception:
         logger.exception("Failed to read thread metadata for sandbox")
         return None
-    return config.get("metadata", {}).get("sandbox_id")
 
 
 async def get_sandbox_backend(thread_id: str) -> Any | None:
