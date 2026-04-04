@@ -31,6 +31,7 @@ from .utils.github_comments import (
     format_github_comment_body_for_prompt,
     get_thread_id_from_branch,
     react_to_github_comment,
+    react_to_github_issue,
     sanitize_github_comment_body,
     verify_github_signature,
 )
@@ -1353,6 +1354,14 @@ async def process_github_issue(payload: dict[str, Any], event_type: str) -> None
             )
             if not reacted:
                 logger.warning("Failed to react to GitHub issue comment %s", comment_id)
+    elif event_type == "issues" and reaction_token:
+        reacted = await react_to_github_issue(
+            repo_config,
+            issue_number,
+            token=reaction_token,
+        )
+        if not reacted:
+            logger.warning("Failed to react to GitHub issue %s", issue_number)
 
     if existing_thread:
         if event_type == "issue_comment":
