@@ -68,6 +68,9 @@ def _ensure_provider(provider: str) -> None:
     ami = os.getenv("DEVPOD_AWS_AMI", "ami-044f1545c3936f4c7")
     subnet_id = os.getenv("DEVPOD_AWS_SUBNET_ID", "")
     vpc_id = os.getenv("DEVPOD_AWS_VPC_ID", "")
+    access_key_id = os.getenv("AWS_ACCESS_KEY_ID", "")
+    secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    session_token = os.getenv("AWS_SESSION_TOKEN", "")
     logger.info("Installing DevPod provider '%s' (region=%s, ami=%s)", provider, region, ami)
 
     # The default AMI is a copy of Canonical's Ubuntu 22.04 into our AWS account with a
@@ -75,7 +78,7 @@ def _ensure_provider(provider: str) -> None:
     # This works around https://github.com/loft-sh/devpod-provider-aws/issues/50 where the
     # provider's init searches owner:"amazon" instead of Canonical (099720109477) and uses a
     # description filter that doesn't match real Ubuntu AMIs.
-    # For production, consider using skevetter's fork which fixes this upstream.
+    # skevetter's fork fixes this upstream, but we keep the workaround for now.
     cmd = [
         "devpod", "provider", "add", provider,
         "-o", f"AWS_REGION={region}",
@@ -86,6 +89,14 @@ def _ensure_provider(provider: str) -> None:
         cmd.extend(["-o", f"AWS_SUBNET_ID={subnet_id}"])
     if vpc_id:
         cmd.extend(["-o", f"AWS_VPC_ID={vpc_id}"])
+    # Pass AWS credentials as provider options so the provider init can call
+    # the AWS API without needing ~/.aws/config (which doesn't exist on Fargate).
+    if access_key_id:
+        cmd.extend(["-o", f"AWS_ACCESS_KEY_ID={access_key_id}"])
+    if secret_access_key:
+        cmd.extend(["-o", f"AWS_SECRET_ACCESS_KEY={secret_access_key}"])
+    if session_token:
+        cmd.extend(["-o", f"AWS_SESSION_TOKEN={session_token}"])
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     logger.info("devpod provider add stdout: %s", result.stdout)
     logger.info("devpod provider add stderr: %s", result.stderr)
