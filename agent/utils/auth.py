@@ -22,7 +22,7 @@ from .slack import post_slack_ephemeral_message, post_slack_thread_reply
 
 logger = logging.getLogger(__name__)
 
-client = get_client()
+client = get_client(url="http://localhost:2026")
 
 LANGSMITH_API_KEY = os.environ.get("LANGSMITH_API_KEY_PROD", "")
 LANGSMITH_API_URL = os.environ.get("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")

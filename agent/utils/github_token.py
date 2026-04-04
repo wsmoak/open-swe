@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 _GITHUB_TOKEN_METADATA_KEY = "github_token_encrypted"
 
-client = get_client()
+client = get_client(url="http://localhost:2026")
 
 
 def _read_encrypted_github_token(metadata: dict[str, Any]) -> str | None:

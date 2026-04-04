@@ -45,7 +45,7 @@ from agent.utils.auth import resolve_github_token
 from agent.utils.model import make_model
 from agent.utils.sandbox import create_sandbox
 
-client = get_client()
+client = get_client(url="http://localhost:2026")
 
 SANDBOX_CREATING = "__creating__"
 SANDBOX_CREATION_TIMEOUT = 180
