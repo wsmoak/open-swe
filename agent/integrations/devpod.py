@@ -334,9 +334,9 @@ def create_devpod_sandbox(
         _login_ecr(prebuild_repo)
 
     if source_repo:
-        # Derive workspace name from the source repo URL, not the webhook repo
-        source_repo_name = source_repo.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
-        workspace_name = _generate_workspace_name(repo_name=source_repo_name)
+        # Use thread-ID-based name so the workspace persists across
+        # interactions in the same thread (GitHub issue or Slack thread).
+        workspace_name = _generate_workspace_name()
     else:
         workspace_name = _generate_workspace_name(repo_name=repo_name if use_git_source else None)
 
