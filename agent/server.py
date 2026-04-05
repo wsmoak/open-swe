@@ -213,7 +213,12 @@ async def _recreate_sandbox(
         metadata={"sandbox_id": SANDBOX_CREATING},
     )
     try:
-        sandbox_backend = await asyncio.to_thread(create_sandbox)
+        sandbox_backend = await asyncio.to_thread(
+            create_sandbox,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            github_token=github_token,
+        )
         repo_dir = await _clone_or_pull_repo_in_sandbox(
             sandbox_backend, repo_owner, repo_name, github_token
         )
@@ -315,7 +320,12 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
 
         try:
             # Create sandbox without context manager cleanup (sandbox persists)
-            sandbox_backend = await asyncio.to_thread(create_sandbox)
+            sandbox_backend = await asyncio.to_thread(
+                create_sandbox,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                github_token=github_token,
+            )
             logger.info("Sandbox created: %s", sandbox_backend.id)
 
             repo_dir = None
@@ -353,7 +363,12 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
             )
 
             try:
-                sandbox_backend = await asyncio.to_thread(create_sandbox)
+                sandbox_backend = await asyncio.to_thread(
+                    create_sandbox,
+                    repo_owner=repo_owner,
+                    repo_name=repo_name,
+                    github_token=github_token,
+                )
                 logger.info("New sandbox created: %s", sandbox_backend.id)
             except Exception:
                 logger.exception("Failed to create replacement sandbox")

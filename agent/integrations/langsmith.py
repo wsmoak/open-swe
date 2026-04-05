@@ -45,6 +45,7 @@ def _get_sandbox_template_config() -> tuple[str | None, str | None]:
 
 def create_langsmith_sandbox(
     sandbox_id: str | None = None,
+    **kwargs,
 ) -> SandboxBackendProtocol:
     """Create or connect to a LangSmith sandbox without automatic cleanup.
 

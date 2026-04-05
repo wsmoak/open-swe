@@ -17,7 +17,7 @@ SANDBOX_FACTORIES = {
 }
 
 
-def create_sandbox(sandbox_id: str | None = None):
+def create_sandbox(sandbox_id: str | None = None, **kwargs):
     """Create or reconnect to a sandbox using the configured provider.
 
     The provider is selected via the SANDBOX_TYPE environment variable.
@@ -25,6 +25,7 @@ def create_sandbox(sandbox_id: str | None = None):
 
     Args:
         sandbox_id: Optional existing sandbox ID to reconnect to.
+        **kwargs: Additional arguments forwarded to the factory (e.g. repo_owner, repo_name, github_token).
 
     Returns:
         A sandbox backend implementing SandboxBackendProtocol.
@@ -34,4 +35,4 @@ def create_sandbox(sandbox_id: str | None = None):
     if not factory:
         supported = ", ".join(sorted(SANDBOX_FACTORIES))
         raise ValueError(f"Invalid sandbox type: {sandbox_type}. Supported types: {supported}")
-    return factory(sandbox_id)
+    return factory(sandbox_id, **kwargs)

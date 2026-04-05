@@ -6,7 +6,7 @@ from langchain_modal import ModalSandbox
 MODAL_APP_NAME = os.getenv("MODAL_APP_NAME", "open-swe")
 
 
-def create_modal_sandbox(sandbox_id: str | None = None):
+def create_modal_sandbox(sandbox_id: str | None = None, **kwargs):
     """Create or reconnect to a Modal sandbox.
 
     Args:

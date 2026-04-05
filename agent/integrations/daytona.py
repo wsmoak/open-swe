@@ -7,7 +7,7 @@ from langchain_daytona import DaytonaSandbox
 DAYTONA_SANDBOX_PARAMS = CreateSandboxFromSnapshotParams(snapshot="daytonaio/sandbox:0.6.0")
 
 
-def create_daytona_sandbox(sandbox_id: str | None = None):
+def create_daytona_sandbox(sandbox_id: str | None = None, **kwargs):
     api_key = os.getenv("DAYTONA_API_KEY")
     if not api_key:
         raise ValueError("DAYTONA_API_KEY environment variable is required")

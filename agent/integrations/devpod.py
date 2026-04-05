@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DEVPOD_IMAGE = "bracelangchain/deepagents-sandbox:v1"
 DEFAULT_DEVPOD_PROVIDER = "aws"
-DEVPOD_UP_TIMEOUT = 300  # 5 minutes for workspace creation
+DEVPOD_UP_TIMEOUT = 600  # 10 minutes for workspace creation (prebuild miss can be slow)
 _provider_installed = False
 
 _UNREACHABLE_ERROR_SNIPPETS = (
@@ -189,18 +189,100 @@ def _disable_git_credential_injection() -> None:
         logger.info("Disabled DevPod git credential injection")
 
 
-def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
+def _login_ecr(prebuild_repo: str) -> None:
+    """Log into ECR on the host so DevPod's credential tunnel can forward creds to EC2.
+
+    Uses boto3 (or the Fargate credential chain) to get an ECR auth token,
+    then runs `docker login`. This avoids needing the AWS CLI installed.
+    """
+    import base64
+    import json
+    import urllib.request
+
+    registry = prebuild_repo.split("/")[0] if "/" in prebuild_repo else prebuild_repo
+    region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-2"))
+
+    try:
+        # Try boto3 first (it handles Fargate credential chain automatically)
+        try:
+            import boto3
+            ecr_client = boto3.client("ecr", region_name=region)
+            response = ecr_client.get_authorization_token()
+            auth_data = response["authorizationData"][0]
+            token = base64.b64decode(auth_data["authorizationToken"]).decode()
+            # Token is "AWS:<password>"
+            password = token.split(":", 1)[1]
+        except ImportError:
+            # No boto3 -- fall back to Fargate credentials + direct API call
+            logger.info("boto3 not available, using Fargate credentials for ECR login")
+            creds = _fetch_fargate_credentials()
+            if not creds:
+                logger.warning("No Fargate credentials available for ECR login")
+                return
+
+            # Use STS-signed request to ECR GetAuthorizationToken
+            # This is complex without boto3, so fall back to aws CLI as last resort
+            password_result = subprocess.run(
+                ["aws", "ecr", "get-login-password", "--region", region],
+                capture_output=True, text=True, timeout=30,
+            )
+            if password_result.returncode != 0:
+                logger.warning("Failed to get ECR login password: %s", password_result.stderr)
+                return
+            password = password_result.stdout.strip()
+
+        # Docker login
+        login_result = subprocess.run(
+            ["docker", "login", "--username", "AWS", "--password-stdin", registry],
+            input=password,
+            capture_output=True, text=True, timeout=30,
+        )
+        if login_result.returncode != 0:
+            logger.warning("Failed to docker login to ECR: %s", login_result.stderr)
+        else:
+            logger.info("Logged into ECR registry %s for prebuild pulls", registry)
+    except Exception:
+        logger.exception("Failed to login to ECR for prebuild")
+
+
+def _setup_host_git_credentials(github_token: str) -> None:
+    """Write a .git-credentials file on the host so DevPod can clone private repos."""
+    import pathlib
+
+    cred_file = pathlib.Path.home() / ".git-credentials"
+    cred_file.write_text(f"https://x-access-token:{github_token}@github.com\n")
+    cred_file.chmod(0o600)
+
+    # Configure git to use the credential store
+    subprocess.run(
+        ["git", "config", "--global", "credential.helper", f"store --file={cred_file}"],
+        capture_output=True, text=True, timeout=10,
+    )
+    logger.info("Configured host-level git credentials for DevPod clone")
+
+
+def create_devpod_sandbox(
+    sandbox_id: str | None = None,
+    *,
+    repo_owner: str | None = None,
+    repo_name: str | None = None,
+    github_token: str | None = None,
+    **kwargs,
+) -> "DevPodBackend":
     """Create or reconnect to a DevPod workspace sandbox.
 
     If sandbox_id is provided, reconnects to an existing workspace by name.
     Otherwise, creates a new workspace using `devpod up`.
 
-    Reads configuration from environment variables:
-        DEVPOD_PROVIDER: Provider name (default: aws)
-        DEVPOD_WORKSPACE_IMAGE: Base container image (default: bracelangchain/deepagents-sandbox:v1)
+    When repo_owner and repo_name are provided, uses `--source git:` mode
+    so DevPod clones the repo and uses its .devcontainer/devcontainer.json.
+    Falls back to `--source image:` when repo info is not available.
 
     Args:
         sandbox_id: Optional existing workspace name to reconnect to.
+        repo_owner: GitHub repo owner (for git source mode).
+        repo_name: GitHub repo name (for git source mode).
+        github_token: GitHub token (for cloning private repos in git source mode).
 
     Returns:
         DevPodBackend instance implementing SandboxBackendProtocol.
@@ -219,35 +301,67 @@ def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
 
     provider = os.getenv("DEVPOD_PROVIDER", DEFAULT_DEVPOD_PROVIDER)
     image = os.getenv("DEVPOD_WORKSPACE_IMAGE", DEFAULT_DEVPOD_IMAGE)
+    prebuild_repo = os.getenv("DEVPOD_PREBUILD_REPOSITORY", "")
+    use_git_source = bool(repo_owner and repo_name)
 
     # Diagnostic: log credential and environment info for debugging Fargate issues
     logger.info(
         "DevPod pre-flight: AWS_ACCESS_KEY_ID=%s, AWS_CONTAINER_CREDENTIALS_RELATIVE_URI=%s, "
-        "AWS_REGION=%s, HOME=%s, DEVPOD_PROVIDER=%s",
+        "AWS_REGION=%s, HOME=%s, DEVPOD_PROVIDER=%s, git_source=%s, prebuild_repo=%s",
         "set" if os.getenv("AWS_ACCESS_KEY_ID") else "unset",
         os.getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "unset"),
         os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "unset")),
         os.getenv("HOME", "unset"),
         provider,
+        use_git_source,
+        prebuild_repo or "unset",
     )
 
     _ensure_provider(provider)
-    _disable_git_credential_injection()
+
+    if use_git_source and github_token:
+        # Set up host-level git credentials so DevPod can clone the repo
+        _setup_host_git_credentials(github_token)
+    else:
+        # Only disable git credential injection in image mode
+        _disable_git_credential_injection()
+
+    if prebuild_repo:
+        # Log into ECR so DevPod's credential tunnel can forward creds to EC2
+        _login_ecr(prebuild_repo)
+
     workspace_name = _generate_workspace_name()
 
-    logger.info(
-        "Creating new DevPod workspace: %s (provider=%s, image=%s)",
-        workspace_name, provider, image,
-    )
-
-    result = subprocess.run(
-        [
+    if use_git_source:
+        source = f"git:https://github.com/{repo_owner}/{repo_name}"
+        logger.info(
+            "Creating new DevPod workspace: %s (provider=%s, source=%s)",
+            workspace_name, provider, source,
+        )
+        cmd = [
+            "devpod", "up", workspace_name,
+            "--provider", provider,
+            "--ide", "none",
+            "--source", source,
+            "--debug",
+        ]
+        if prebuild_repo:
+            cmd.extend(["--prebuild-repository", prebuild_repo])
+    else:
+        logger.info(
+            "Creating new DevPod workspace: %s (provider=%s, image=%s)",
+            workspace_name, provider, image,
+        )
+        cmd = [
             "devpod", "up", workspace_name,
             "--provider", provider,
             "--ide", "none",
             "--source", f"image:{image}",
             "--debug",
-        ],
+        ]
+
+    result = subprocess.run(
+        cmd,
         capture_output=True,
         text=True,
         timeout=DEVPOD_UP_TIMEOUT,
@@ -262,7 +376,7 @@ def create_devpod_sandbox(sandbox_id: str | None = None) -> "DevPodBackend":
         )
 
     logger.info("DevPod workspace created: %s", workspace_name)
-    backend = DevPodBackend(workspace_name=workspace_name)
+    backend = DevPodBackend(workspace_name=workspace_name, git_source=use_git_source)
     _update_thread_sandbox_metadata(workspace_name)
     return backend
 
@@ -322,13 +436,25 @@ class DevPodBackend(BaseSandbox):
     All file operations are inherited from BaseSandbox and delegate to execute().
     """
 
-    def __init__(self, workspace_name: str) -> None:
+    def __init__(self, workspace_name: str, *, git_source: bool = False) -> None:
         self._workspace_name = workspace_name
+        self._git_source = git_source
         self._default_timeout: int = 30 * 5  # 5 minutes
 
     @property
     def id(self) -> str:
         return self._workspace_name
+
+    def get_work_dir(self) -> str | None:
+        """Return the workspace base directory.
+
+        In git-source mode, DevPod mounts the repo at /workspaces/{repo-name},
+        so the base is /workspaces. In image mode, returns None to fall back
+        to the default resolution logic (pwd).
+        """
+        if self._git_source:
+            return "/workspaces"
+        return None
 
     def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
         """Execute a shell command inside the DevPod workspace via SSH."""
@@ -339,7 +465,11 @@ class DevPodBackend(BaseSandbox):
         # can be ignored.
         wrapped = f"{{ {command}; }} 2>&1"
         result = subprocess.run(
-            ["devpod", "ssh", self._workspace_name, "--command", wrapped],
+            [
+                "devpod", "ssh", self._workspace_name,
+                "--start-services=false",
+                "--command", wrapped,
+            ],
             capture_output=True,
             text=True,
             timeout=effective_timeout,

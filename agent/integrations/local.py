@@ -3,7 +3,7 @@ import os
 from deepagents.backends import LocalShellBackend
 
 
-def create_local_sandbox(sandbox_id: str | None = None):
+def create_local_sandbox(sandbox_id: str | None = None, **kwargs):
     """Create a local shell sandbox with no isolation.
 
     WARNING: This runs commands directly on the host machine with no sandboxing.

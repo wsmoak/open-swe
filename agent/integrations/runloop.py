@@ -4,7 +4,7 @@ from langchain_runloop import RunloopSandbox
 from runloop_api_client import Client
 
 
-def create_runloop_sandbox(sandbox_id: str | None = None):
+def create_runloop_sandbox(sandbox_id: str | None = None, **kwargs):
     """Create or reconnect to a Runloop devbox sandbox.
 
     Requires the RUNLOOP_API_KEY environment variable to be set.
