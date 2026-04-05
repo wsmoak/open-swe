@@ -51,7 +51,7 @@ def check_if_no_op(messages: list[AnyMessage]) -> bool:
 @after_model
 def ensure_no_empty_msg(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
     last_msg = state["messages"][-1]
-    has_contents = bool(last_msg.text())
+    has_contents = bool(last_msg.text)
     has_tool_calls = bool(last_msg.tool_calls)
     if not has_tool_calls and not has_contents:
         messages_since_last_human = get_every_message_since_last_human(state)
