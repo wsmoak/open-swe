@@ -274,9 +274,10 @@ def create_devpod_sandbox(
     If sandbox_id is provided, reconnects to an existing workspace by name.
     Otherwise, creates a new workspace using `devpod up`.
 
-    When repo_owner and repo_name are provided, uses `--source git:` mode
-    so DevPod clones the repo and uses its .devcontainer/devcontainer.json.
-    Falls back to `--source image:` when repo info is not available.
+    Source priority for `--source git:`:
+    1. DEVPOD_SOURCE_REPO env var (e.g. a multi-repo devcontainer repo)
+    2. repo_owner/repo_name from the webhook (single-repo devcontainer)
+    3. Falls back to `--source image:` when neither is available.
 
     Args:
         sandbox_id: Optional existing workspace name to reconnect to.
@@ -302,18 +303,20 @@ def create_devpod_sandbox(
     provider = os.getenv("DEVPOD_PROVIDER", DEFAULT_DEVPOD_PROVIDER)
     image = os.getenv("DEVPOD_WORKSPACE_IMAGE", DEFAULT_DEVPOD_IMAGE)
     prebuild_repo = os.getenv("DEVPOD_PREBUILD_REPOSITORY", "")
-    use_git_source = bool(repo_owner and repo_name)
+    source_repo = os.getenv("DEVPOD_SOURCE_REPO", "")
+    use_git_source = bool(source_repo or (repo_owner and repo_name))
 
     # Diagnostic: log credential and environment info for debugging Fargate issues
     logger.info(
         "DevPod pre-flight: AWS_ACCESS_KEY_ID=%s, AWS_CONTAINER_CREDENTIALS_RELATIVE_URI=%s, "
-        "AWS_REGION=%s, HOME=%s, DEVPOD_PROVIDER=%s, git_source=%s, prebuild_repo=%s",
+        "AWS_REGION=%s, HOME=%s, DEVPOD_PROVIDER=%s, git_source=%s, source_repo=%s, prebuild_repo=%s",
         "set" if os.getenv("AWS_ACCESS_KEY_ID") else "unset",
         os.getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "unset"),
         os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "unset")),
         os.getenv("HOME", "unset"),
         provider,
         use_git_source,
+        source_repo or "unset",
         prebuild_repo or "unset",
     )
 
@@ -330,10 +333,15 @@ def create_devpod_sandbox(
         # Log into ECR so DevPod's credential tunnel can forward creds to EC2
         _login_ecr(prebuild_repo)
 
-    workspace_name = _generate_workspace_name(repo_name=repo_name if use_git_source else None)
+    if source_repo:
+        # Derive workspace name from the source repo URL, not the webhook repo
+        source_repo_name = source_repo.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+        workspace_name = _generate_workspace_name(repo_name=source_repo_name)
+    else:
+        workspace_name = _generate_workspace_name(repo_name=repo_name if use_git_source else None)
 
     if use_git_source:
-        source = f"git:https://github.com/{repo_owner}/{repo_name}"
+        source = f"git:{source_repo}" if source_repo else f"git:https://github.com/{repo_owner}/{repo_name}"
         logger.info(
             "Creating new DevPod workspace: %s (provider=%s, source=%s)",
             workspace_name, provider, source,
