@@ -330,7 +330,7 @@ def create_devpod_sandbox(
         # Log into ECR so DevPod's credential tunnel can forward creds to EC2
         _login_ecr(prebuild_repo)
 
-    workspace_name = _generate_workspace_name()
+    workspace_name = _generate_workspace_name(repo_name=repo_name if use_git_source else None)
 
     if use_git_source:
         source = f"git:https://github.com/{repo_owner}/{repo_name}"
@@ -381,12 +381,20 @@ def create_devpod_sandbox(
     return backend
 
 
-def _generate_workspace_name() -> str:
-    """Generate a unique workspace name from the LangGraph thread_id or a UUID.
+def _generate_workspace_name(*, repo_name: str | None = None) -> str:
+    """Generate a workspace name for DevPod.
+
+    In git-source mode (repo_name provided), uses the repo name so that
+    DevPod creates the workspace directory at /workspaces/{repo_name},
+    matching what the agent code expects.
+
+    In image mode (no repo_name), falls back to a thread-id or UUID based name.
 
     DevPod workspace names must be valid as SSH hostnames: lowercase
     alphanumerics and hyphens, starting with a letter.
     """
+    if repo_name:
+        return repo_name.lower()
     try:
         from langgraph.config import get_config
         config = get_config()
