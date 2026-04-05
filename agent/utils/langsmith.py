@@ -26,5 +26,5 @@ def get_langsmith_trace_url(run_id: str) -> str | None:
         url_base = _compose_langsmith_url_base()
         return f"{url_base}/{run_id}?poll=true"
     except Exception:  # noqa: BLE001
-        logger.warning("Failed to build LangSmith trace URL for run %s", run_id, exc_info=True)
+        logger.debug("Failed to build LangSmith trace URL for run %s", run_id, exc_info=True)
         return None

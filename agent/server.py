@@ -47,6 +47,7 @@ from agent.utils.sandbox import create_sandbox
 from agent.utils.sandbox_errors import SandboxUnavailableError
 
 _LANGGRAPH_URL = os.environ.get("LANGGRAPH_URL", "http://localhost:2026")
+_DEVPOD_SOURCE_REPO = os.environ.get("DEVPOD_SOURCE_REPO", "")
 client = get_client(url=_LANGGRAPH_URL)
 
 SANDBOX_CREATING = "__creating__"
@@ -63,6 +64,14 @@ from agent.utils.github import (
 )
 from agent.utils.sandbox_paths import aresolve_repo_dir, aresolve_sandbox_work_dir
 from agent.utils.sandbox_state import SANDBOX_BACKENDS, get_sandbox_id_from_metadata
+
+
+def _is_devpod_source_repo(owner: str, repo: str) -> bool:
+    """Check if owner/repo matches the DEVPOD_SOURCE_REPO env var."""
+    if not _DEVPOD_SOURCE_REPO:
+        return False
+    # DEVPOD_SOURCE_REPO is a URL like https://github.com/wsmoak/multi-repo-dev-containers
+    return _DEVPOD_SOURCE_REPO.rstrip("/").endswith(f"/{owner}/{repo}")
 
 
 async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
@@ -300,19 +309,26 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
         repo_dir = metadata.get("repo_dir")
 
         if repo_owner and repo_name:
-            logger.info("Pulling latest changes for repo %s/%s", repo_owner, repo_name)
-            try:
-                repo_dir = await _clone_or_pull_repo_in_sandbox(
-                    sandbox_backend, repo_owner, repo_name, github_token
+            if _is_devpod_source_repo(repo_owner, repo_name):
+                repo_dir = await aresolve_repo_dir(sandbox_backend, repo_name)
+                logger.info(
+                    "Skipping pull for %s/%s — it is the DevPod source repo, using %s",
+                    repo_owner, repo_name, repo_dir,
                 )
-            except SandboxUnavailableError:
-                logger.warning(
-                    "Cached sandbox is no longer reachable for thread %s, recreating sandbox",
-                    thread_id,
-                )
-                sandbox_backend, repo_dir = await _recreate_sandbox(
-                    thread_id, repo_owner, repo_name, github_token=github_token
-                )
+            else:
+                logger.info("Pulling latest changes for repo %s/%s", repo_owner, repo_name)
+                try:
+                    repo_dir = await _clone_or_pull_repo_in_sandbox(
+                        sandbox_backend, repo_owner, repo_name, github_token
+                    )
+                except SandboxUnavailableError:
+                    logger.warning(
+                        "Cached sandbox is no longer reachable for thread %s, recreating sandbox",
+                        thread_id,
+                    )
+                    sandbox_backend, repo_dir = await _recreate_sandbox(
+                        thread_id, repo_owner, repo_name, github_token=github_token
+                    )
 
     elif sandbox_id is None:
         logger.info("Creating new sandbox for thread %s", thread_id)
@@ -330,11 +346,18 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
 
             repo_dir = None
             if repo_owner and repo_name:
-                logger.info("Cloning repo %s/%s into sandbox", repo_owner, repo_name)
-                repo_dir = await _clone_or_pull_repo_in_sandbox(
-                    sandbox_backend, repo_owner, repo_name, github_token
-                )
-                logger.info("Repo cloned to %s", repo_dir)
+                if _is_devpod_source_repo(repo_owner, repo_name):
+                    repo_dir = await aresolve_repo_dir(sandbox_backend, repo_name)
+                    logger.info(
+                        "Skipping clone for %s/%s — it is the DevPod source repo, using %s",
+                        repo_owner, repo_name, repo_dir,
+                    )
+                else:
+                    logger.info("Cloning repo %s/%s into sandbox", repo_owner, repo_name)
+                    repo_dir = await _clone_or_pull_repo_in_sandbox(
+                        sandbox_backend, repo_owner, repo_name, github_token
+                    )
+                    logger.info("Repo cloned to %s", repo_dir)
 
                 await client.threads.update(
                     thread_id=thread_id,
@@ -379,19 +402,26 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
         repo_dir = metadata.get("repo_dir")
 
         if repo_owner and repo_name:
-            logger.info("Pulling latest changes for repo %s/%s", repo_owner, repo_name)
-            try:
-                repo_dir = await _clone_or_pull_repo_in_sandbox(
-                    sandbox_backend, repo_owner, repo_name, github_token
+            if _is_devpod_source_repo(repo_owner, repo_name):
+                repo_dir = await aresolve_repo_dir(sandbox_backend, repo_name)
+                logger.info(
+                    "Skipping pull for %s/%s — it is the DevPod source repo, using %s",
+                    repo_owner, repo_name, repo_dir,
                 )
-            except SandboxUnavailableError:
-                logger.warning(
-                    "Existing sandbox is no longer reachable for thread %s, recreating sandbox",
-                    thread_id,
-                )
-                sandbox_backend, repo_dir = await _recreate_sandbox(
-                    thread_id, repo_owner, repo_name, github_token=github_token
-                )
+            else:
+                logger.info("Pulling latest changes for repo %s/%s", repo_owner, repo_name)
+                try:
+                    repo_dir = await _clone_or_pull_repo_in_sandbox(
+                        sandbox_backend, repo_owner, repo_name, github_token
+                    )
+                except SandboxUnavailableError:
+                    logger.warning(
+                        "Existing sandbox is no longer reachable for thread %s, recreating sandbox",
+                        thread_id,
+                    )
+                    sandbox_backend, repo_dir = await _recreate_sandbox(
+                        thread_id, repo_owner, repo_name, github_token=github_token
+                    )
 
     SANDBOX_BACKENDS[thread_id] = sandbox_backend
 

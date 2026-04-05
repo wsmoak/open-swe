@@ -28,6 +28,8 @@ def commit_and_open_pr(
     title: str,
     body: str,
     commit_message: str | None = None,
+    repo_owner: str | None = None,
+    repo_name: str | None = None,
 ) -> dict[str, Any]:
     """Commit all current changes and open a GitHub Pull Request.
 
@@ -96,10 +98,22 @@ def commit_and_open_pr(
     rather than the "what". Summarize the nature of the changes: new feature,
     bug fix, refactoring, etc. If not provided, the PR title is used.
 
+    ## Multi-Repo Support
+
+    In a multi-repo workspace, call this tool separately for each repo that has
+    changes. Pass `repo_owner` and `repo_name` to target a specific repo instead
+    of the default thread repo.
+
+    Example for multi-repo:
+    - commit_and_open_pr(title="feat: add API endpoint", body="...", repo_owner="wsmoak", repo_name="rails-otel-demo")
+    - commit_and_open_pr(title="feat: call new API", body="...", repo_owner="wsmoak", repo_name="django-polls-playwright-demo")
+
     Args:
         title: PR title following the format above (e.g. "fix: resolve auth bug [closes AA-123]")
         body: PR description following the template above with ## Description and ## Test Plan
         commit_message: Optional git commit message. If not provided, the PR title is used.
+        repo_owner: Optional GitHub repo owner. Overrides the default thread repo.
+        repo_name: Optional GitHub repo name. Overrides the default thread repo.
 
     Returns:
         Dictionary containing:
@@ -117,8 +131,8 @@ def commit_and_open_pr(
             return {"success": False, "error": "Missing thread_id in config", "pr_url": None}
 
         repo_config = configurable.get("repo", {})
-        repo_owner = repo_config.get("owner")
-        repo_name = repo_config.get("name")
+        repo_owner = repo_owner or repo_config.get("owner")
+        repo_name = repo_name or repo_config.get("name")
         if not repo_owner or not repo_name:
             return {
                 "success": False,
