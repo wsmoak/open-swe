@@ -350,10 +350,14 @@ async def _resolve_bot_installation_token(thread_id: str) -> tuple[str, str]:
     """Get a GitHub App installation token and persist it for the thread."""
     bot_token = await get_github_app_installation_token()
     if not bot_token:
+        # Fall back to GITHUB_TOKEN env var for local development
+        bot_token = os.environ.get("GITHUB_TOKEN")
+    if not bot_token:
         raise RuntimeError(
             "Bot-token-only mode is active (LANGSMITH_API_KEY_PROD set without "
             "X_SERVICE_AUTH_JWT_SECRET) but the GitHub App is not configured. "
-            "Set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_APP_INSTALLATION_ID."
+            "Set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_APP_INSTALLATION_ID, "
+            "or set GITHUB_TOKEN for local development."
         )
     logger.info(
         "Using GitHub App installation token for thread %s (bot-token-only mode)", thread_id

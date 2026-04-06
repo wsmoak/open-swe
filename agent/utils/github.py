@@ -128,9 +128,9 @@ _CRED_FILE_PATH = "/tmp/.git-credentials"
 def setup_git_credentials(sandbox_backend: SandboxBackendProtocol, github_token: str) -> None:
     """Write GitHub credentials to a file in the sandbox.
 
-    Uses printf via execute() rather than sandbox_backend.write() because
-    write() fails if the file already exists and heredocs may not work
-    reliably through DevPod SSH.
+    Uses printf via execute() because the protocol's write() method fails
+    if the file already exists, and credentials may need to be overwritten
+    across multiple operations.
     """
     cred_line = f"https://git:{github_token}@github.com"
     sandbox_backend.execute(

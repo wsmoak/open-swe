@@ -456,7 +456,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
         msg = "Cannot proceed: no repo was cloned. Set 'repo.owner' and 'repo.name' in the configurable config"
         raise RuntimeError(msg)
 
-    branch_name = get_config().get("metadata", {}).get("branch_name")
+    branch_name = config.get("metadata", {}).get("branch_name")
     if branch_name:
         logger.info("Checking out branch '%s' in sandbox for thread %s", branch_name, thread_id)
         loop = asyncio.get_event_loop()
