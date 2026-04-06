@@ -27,7 +27,7 @@ def test_execute_builds_correct_cli_args() -> None:
 
     mock_run.assert_called_once()
     args = mock_run.call_args[0][0]
-    assert args == ["devpod", "ssh", "my-workspace", "--command", "{ echo hello; } 2>&1"]
+    assert args == ["devpod", "ssh", "my-workspace", "--start-services=false", "--command", "{ echo hello; } 2>&1"]
 
 
 def test_execute_wraps_stderr_into_stdout() -> None:
