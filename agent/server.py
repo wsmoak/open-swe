@@ -34,11 +34,25 @@ from agent.middleware import (
 from agent.prompt import construct_system_prompt
 from agent.tools import (
     commit_and_open_pr,
+    create_pr_review,
+    dismiss_pr_review,
     fetch_url,
+    get_pr_review,
     github_comment,
     http_request,
     linear_comment,
+    linear_create_issue,
+    linear_delete_issue,
+    linear_get_issue,
+    linear_get_issue_comments,
+    linear_list_teams,
+    linear_update_issue,
+    list_pr_review_comments,
+    list_pr_reviews,
     slack_thread_reply,
+    submit_pr_review,
+    update_pr_review,
+    web_search,
 )
 from agent.utils.auth import resolve_github_token
 from agent.utils.model import make_model
@@ -56,7 +70,10 @@ SANDBOX_POLL_INTERVAL = 1.0
 from agent.utils.agents_md import read_agents_md_in_sandbox
 from agent.utils.github import (
     _CRED_FILE_PATH,
+    cleanup_git_credentials,
+    git_current_branch,
     git_has_uncommitted_changes,
+    git_pull_branch,
     is_valid_git_repo,
     remove_directory,
     setup_git_credentials,
@@ -82,7 +99,7 @@ async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
     """Clone a GitHub repo into the sandbox, or pull if it already exists.
 
     Args:
-        sandbox_backend: The sandbox backend to execute commands in (LangSmithBackend)
+        sandbox_backend: The sandbox backend to execute commands in
         owner: GitHub repo owner
         repo: GitHub repo name
         github_token: GitHub access token (from agent auth or env var)
@@ -102,6 +119,7 @@ async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
     work_dir = await aresolve_sandbox_work_dir(sandbox_backend)
     repo_dir = await aresolve_repo_dir(sandbox_backend, repo)
     clean_url = f"https://github.com/{owner}/{repo}.git"
+    cred_helper = shlex.quote(f"store --file={_CRED_FILE_PATH}")
     safe_repo_dir = shlex.quote(repo_dir)
     safe_clean_url = shlex.quote(clean_url)
 
@@ -133,18 +151,22 @@ async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
 
         logger.info("Repo is clean, pulling latest changes from %s/%s", owner, repo)
 
-        await loop.run_in_executor(None, setup_git_credentials, sandbox_backend, token)
-        for scope in ("--global", "--system"):
-            await loop.run_in_executor(
-                None,
-                sandbox_backend.execute,
-                f"git config {scope} credential.helper 'store --file={_CRED_FILE_PATH}'",
-            )
         try:
+            current_branch = await loop.run_in_executor(
+                None, git_current_branch, sandbox_backend, repo_dir
+            )
+            if not current_branch:
+                msg = f"Failed to determine current branch for repo at {repo_dir}"
+                logger.error(msg)
+                raise RuntimeError(msg)
+
             pull_result = await loop.run_in_executor(
                 None,
-                sandbox_backend.execute,
-                f"cd {repo_dir} && git pull origin $(git rev-parse --abbrev-ref HEAD)",
+                git_pull_branch,
+                sandbox_backend,
+                repo_dir,
+                current_branch,
+                token,
             )
             logger.debug("Git pull result: exit_code=%s", pull_result.exit_code)
             if pull_result.exit_code != 0:
@@ -180,7 +202,7 @@ async def _clone_or_pull_repo_in_sandbox(  # noqa: PLR0915
         result = await loop.run_in_executor(
             None,
             sandbox_backend.execute,
-            f"git clone {safe_clean_url} {safe_repo_dir}",
+            f"git -c credential.helper={cred_helper} clone {safe_clean_url} {safe_repo_dir}",
         )
         logger.debug("Git clone result: exit_code=%s", result.exit_code)
     except Exception:
@@ -267,6 +289,7 @@ def graph_loaded_for_execution(config: RunnableConfig) -> bool:
     )
 
 
+DEFAULT_LLM_MODEL_ID = "anthropic:claude-opus-4-6"
 DEFAULT_RECURSION_LIMIT = 1_000
 
 
@@ -433,6 +456,24 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
         msg = "Cannot proceed: no repo was cloned. Set 'repo.owner' and 'repo.name' in the configurable config"
         raise RuntimeError(msg)
 
+    branch_name = get_config().get("metadata", {}).get("branch_name")
+    if branch_name:
+        logger.info("Checking out branch '%s' in sandbox for thread %s", branch_name, thread_id)
+        loop = asyncio.get_event_loop()
+        safe_repo_dir = shlex.quote(repo_dir)
+        safe_branch = shlex.quote(branch_name)
+        checkout_result = await loop.run_in_executor(
+            None,
+            sandbox_backend.execute,
+            f"cd {safe_repo_dir} && git fetch origin && git checkout {safe_branch}",
+        )
+        if checkout_result.exit_code != 0:
+            logger.warning(
+                "Failed to checkout branch '%s': %s",
+                branch_name,
+                checkout_result.output[:200] if checkout_result.output else "",
+            )
+
     linear_issue = config["configurable"].get("linear_issue", {})
     linear_project_id = linear_issue.get("linear_project_id", "")
     linear_issue_number = linear_issue.get("linear_issue_number", "")
@@ -440,7 +481,11 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
 
     logger.info("Returning agent with sandbox for thread %s", thread_id)
     return create_deep_agent(
-        model=make_model("anthropic:claude-opus-4-6", temperature=0, max_tokens=20_000),
+        model=make_model(
+            os.environ.get("LLM_MODEL_ID", DEFAULT_LLM_MODEL_ID),
+            temperature=0,
+            max_tokens=20_000,
+        ),
         system_prompt=construct_system_prompt(
             repo_dir,
             linear_project_id=linear_project_id,
@@ -450,10 +495,24 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
         tools=[
             http_request,
             fetch_url,
+            web_search,
             commit_and_open_pr,
             linear_comment,
+            linear_create_issue,
+            linear_delete_issue,
+            linear_get_issue,
+            linear_get_issue_comments,
+            linear_list_teams,
+            linear_update_issue,
             slack_thread_reply,
             github_comment,
+            list_pr_reviews,
+            get_pr_review,
+            create_pr_review,
+            update_pr_review,
+            dismiss_pr_review,
+            submit_pr_review,
+            list_pr_review_comments,
         ],
         backend=sandbox_backend,
         middleware=[
