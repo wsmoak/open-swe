@@ -10,7 +10,6 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
-from langgraph.config import get_config
 from langgraph.graph.state import RunnableConfig
 from langgraph.pregel import Pregel
 from langgraph_sdk import get_client
@@ -300,12 +299,17 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
     sandbox_id = await get_sandbox_id_from_metadata(thread_id)
 
     if sandbox_id == SANDBOX_CREATING and not sandbox_backend:
-        logger.info("Sandbox creation in progress, waiting...")
-        sandbox_id = await _wait_for_sandbox_id(thread_id)
+        logger.warning(
+            "Stale SANDBOX_CREATING sentinel for thread %s (no in-memory backend). "
+            "Resetting to None so a new sandbox will be created.",
+            thread_id,
+        )
+        await client.threads.update(thread_id=thread_id, metadata={"sandbox_id": None})
+        sandbox_id = None
 
     if sandbox_backend:
         logger.info("Using cached sandbox backend for thread %s", thread_id)
-        metadata = get_config().get("metadata", {})
+        metadata = config.get("metadata", {})
         repo_dir = metadata.get("repo_dir")
 
         if repo_owner and repo_name:
@@ -398,7 +402,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:  # noqa: PLR0915
                 await client.threads.update(thread_id=thread_id, metadata={"sandbox_id": None})
                 raise
 
-        metadata = get_config().get("metadata", {})
+        metadata = config.get("metadata", {})
         repo_dir = metadata.get("repo_dir")
 
         if repo_owner and repo_name:
