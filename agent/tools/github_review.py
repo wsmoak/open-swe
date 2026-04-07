@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Any
 
 import httpx
@@ -23,7 +24,10 @@ def _github_headers(token: str) -> dict[str, str]:
 
 
 async def _get_token() -> str | None:
-    return await get_github_app_installation_token()
+    token = await get_github_app_installation_token()
+    if not token:
+        token = os.environ.get("GITHUB_TOKEN")
+    return token
 
 
 def _repo_url(repo_config: dict[str, str]) -> str:

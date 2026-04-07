@@ -1214,6 +1214,8 @@ async def _get_or_resolve_thread_github_token(thread_id: str, email: str) -> str
     """
     if is_bot_token_only_mode():
         bot_token = await get_github_app_installation_token()
+        if not bot_token:
+            bot_token = os.environ.get("GITHUB_TOKEN")
         if bot_token:
             try:
                 await persist_encrypted_github_token(thread_id, bot_token)
@@ -1373,6 +1375,8 @@ async def process_github_issue(payload: dict[str, Any], event_type: str) -> None
     existing_thread = await _thread_exists(thread_id)
     github_token = await _get_or_resolve_thread_github_token(thread_id, email)
     app_token = await get_github_app_installation_token()
+    if not app_token:
+        app_token = os.environ.get("GITHUB_TOKEN")
     reaction_token = github_token or app_token
     comment = payload.get("comment", {})
     comment_id = comment.get("id")

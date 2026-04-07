@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Any
 
 from langgraph.config import get_config
@@ -166,6 +167,8 @@ def commit_and_open_pr(
             return {"success": False, "error": "No changes detected", "pr_url": None}
 
         installation_token = asyncio.run(get_github_app_installation_token())
+        if not installation_token:
+            installation_token = os.environ.get("GITHUB_TOKEN")
         if not installation_token:
             return {
                 "success": False,

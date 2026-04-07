@@ -8,6 +8,7 @@ commits any remaining changes, pushes to a feature branch, and opens a GitHub PR
 from __future__ import annotations
 
 import asyncio
+import os
 import json as _json
 import logging
 from typing import Any
@@ -101,6 +102,8 @@ async def open_pr_if_needed(
         commit_message = add_user_coauthor_trailer(commit_message, user_identity)
 
         installation_token = await get_github_app_installation_token()
+        if not installation_token:
+            installation_token = os.environ.get("GITHUB_TOKEN")
         if not installation_token:
             logger.error("Failed to get GitHub App installation token for thread %s", thread_id)
             return None

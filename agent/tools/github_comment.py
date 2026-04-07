@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Any
 
 from langgraph.config import get_config
@@ -33,6 +34,8 @@ def github_comment(message: str, issue_number: int = 0) -> dict[str, Any]:
         return {"success": False, "error": "Message cannot be empty"}
 
     token = asyncio.run(get_github_app_installation_token())
+    if not token:
+        token = os.environ.get("GITHUB_TOKEN")
     if not token:
         return {"success": False, "error": "Failed to get GitHub App installation token"}
 
