@@ -1,0 +1,145 @@
+replicaCount: 1
+
+image:
+  repository: your-registry/open-swe
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 2026
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: open-swe.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: open-swe-tls
+  #   hosts:
+  #     - open-swe.example.com
+
+# PostgreSQL configuration
+postgres:
+  enabled: true
+  host: open-swe-postgres
+  port: 5432
+  database: openswe
+  username: openswe
+  # Password should be provided via --set or secrets
+  existingSecret: ""
+  existingSecretPasswordKey: "postgres-password"
+
+# Redis configuration
+redis:
+  enabled: true
+  host: open-swe-redis
+  port: 6379
+  brokerEnabled: "true"
+  # Password should be provided via --set or secrets
+  existingSecret: ""
+  existingSecretPasswordKey: "redis-password"
+
+# Container resources
+resources:
+  limits:
+    cpu: 2
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node affinity
+nodeSelector: {}
+affinity: {}
+tolerations: []
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+# Environment variables - API Keys and secrets
+env:
+  # LLM
+  ANTHROPIC_API_KEY: ""
+
+  # GitHub App
+  GITHUB_APP_ID: ""
+  GITHUB_APP_INSTALLATION_ID: ""
+  GITHUB_WEBHOOK_SECRET: ""
+
+  # GitHub OAuth (optional)
+  GITHUB_OAUTH_PROVIDER_ID: ""
+  ALLOWED_GITHUB_ORGS: ""
+
+  # Default repository
+  DEFAULT_REPO_OWNER: "langchain-ai"
+  DEFAULT_REPO_NAME: "langchainplus"
+
+  # Linear (optional)
+  LINEAR_API_KEY: ""
+  LINEAR_WEBHOOK_SECRET: ""
+
+  # Slack (optional)
+  SLACK_BOT_TOKEN: ""
+  SLACK_BOT_USER_ID: ""
+  SLACK_BOT_USERNAME: "open-swe"
+  SLACK_SIGNING_SECRET: ""
+
+  # Exa (optional)
+  EXA_API_KEY: ""
+
+  # Sandbox
+  DEFAULT_SANDBOX_SNAPSHOT_ID: ""
+  DEFAULT_SANDBOX_SNAPSHOT_FS_CAPACITY_BYTES: ""
+  DEFAULT_SANDBOX_VCPUS: ""
+  DEFAULT_SANDBOX_MEM_BYTES: ""
+
+# Secrets (use these for sensitive values)
+secrets:
+  GITHUB_APP_PRIVATE_KEY: ""
+  TOKEN_ENCRYPTION_KEY: ""
+
+# Health checks
+healthCheck:
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3

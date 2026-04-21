@@ -1,0 +1,128 @@
+# Production environment values
+# Usage: helm install open-swe . -f examples/values-prod.yaml --set postgres.password=*** --set redis.password=***
+
+replicaCount: 2
+
+image:
+  repository: your-registry/open-swe
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: open-swe.example.com
+      paths:
+        - path: /
+  tls:
+    - secretName: open-swe-tls
+      hosts:
+        - open-swe.example.com
+
+postgres:
+  # AWS RDS example
+  host: openswe-db.c123456.us-east-1.rds.amazonaws.com
+  port: 5432
+  database: openswe
+  username: openswe
+  # password: Set via --set postgres.password=***
+
+redis:
+  # AWS ElastiCache example
+  enabled: true
+  host: openswe-cache.abc123.cache.amazonaws.com
+  port: 6379
+  brokerEnabled: "true"
+  # password: Set via --set redis.password=***
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector:
+  workload: agents
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - open-swe
+          topologyKey: kubernetes.io/hostname
+
+podAnnotations:
+  env: production
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+env:
+  ANTHROPIC_API_KEY: "sk-..." # Set your actual key
+
+  GITHUB_APP_ID: "your-app-id"
+  GITHUB_APP_INSTALLATION_ID: "your-installation-id"
+  GITHUB_WEBHOOK_SECRET: "your-webhook-secret"
+  GITHUB_OAUTH_PROVIDER_ID: "github-oauth"
+  ALLOWED_GITHUB_ORGS: "my-org,other-org"
+
+  DEFAULT_REPO_OWNER: "my-org"
+  DEFAULT_REPO_NAME: "my-repo"
+
+  LINEAR_API_KEY: "lin_..." # Optional
+  LINEAR_WEBHOOK_SECRET: "your-secret"
+
+  SLACK_BOT_TOKEN: "xoxb-..." # Optional
+  SLACK_BOT_USER_ID: "U123456"
+  SLACK_BOT_USERNAME: "open-swe"
+  SLACK_SIGNING_SECRET: "your-secret"
+
+  EXA_API_KEY: "your-key" # Optional
+
+  DEFAULT_SANDBOX_SNAPSHOT_ID: "snapshot-id"
+  DEFAULT_SANDBOX_VCPUS: "4"
+  DEFAULT_SANDBOX_MEM_BYTES: "16106127360"  # 15 GiB
+
+healthCheck:
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3

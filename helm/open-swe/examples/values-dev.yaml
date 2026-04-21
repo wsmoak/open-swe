@@ -1,0 +1,52 @@
+# Development environment values
+# Usage: helm install open-swe . -f examples/values-dev.yaml
+
+replicaCount: 1
+
+image:
+  repository: your-registry/open-swe
+  tag: dev
+  pullPolicy: Always
+
+service:
+  type: LoadBalancer
+  port: 80
+
+ingress:
+  enabled: false
+
+postgres:
+  host: postgres-dev.default
+  port: 5432
+  database: openswe_dev
+  username: openswe
+  password: "dev-password"
+
+redis:
+  enabled: true
+  host: redis-dev.default
+  port: 6379
+  brokerEnabled: "false"  # In-process jobs for dev
+  password: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1
+    memory: 1Gi
+
+autoscaling:
+  enabled: false
+
+podAnnotations:
+  env: development
+
+env:
+  ANTHROPIC_API_KEY: "test-key"
+  GITHUB_APP_ID: "test-id"
+  GITHUB_APP_INSTALLATION_ID: "test-id"
+  GITHUB_WEBHOOK_SECRET: "test-secret"
+  DEFAULT_REPO_OWNER: "test-org"
+  DEFAULT_REPO_NAME: "test-repo"
