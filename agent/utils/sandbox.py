@@ -1,11 +1,11 @@
 import os
 
-from agent.integrations.daytona import create_daytona_sandbox
-from agent.integrations.devpod import create_devpod_sandbox
-from agent.integrations.langsmith import create_langsmith_sandbox
-from agent.integrations.local import create_local_sandbox
-from agent.integrations.modal import create_modal_sandbox
-from agent.integrations.runloop import create_runloop_sandbox
+from ..integrations.daytona import create_daytona_sandbox
+from ..integrations.devpod import create_devpod_sandbox
+from ..integrations.langsmith import create_langsmith_sandbox
+from ..integrations.local import create_local_sandbox
+from ..integrations.modal import create_modal_sandbox
+from ..integrations.runloop import create_runloop_sandbox
 
 SANDBOX_FACTORIES = {
     "langsmith": create_langsmith_sandbox,
@@ -36,3 +36,17 @@ def create_sandbox(sandbox_id: str | None = None, **kwargs):
         supported = ", ".join(sorted(SANDBOX_FACTORIES))
         raise ValueError(f"Invalid sandbox type: {sandbox_type}. Supported types: {supported}")
     return factory(sandbox_id, **kwargs)
+
+
+def validate_sandbox_startup_config() -> None:
+    """Validate the configured sandbox provider's env vars at server startup.
+
+    Raises ValueError if the active provider's configuration is invalid.
+    Called from the FastAPI lifespan hook so errors surface at boot rather
+    than on the first sandbox creation.
+    """
+    sandbox_type = os.getenv("SANDBOX_TYPE", "langsmith")
+    if sandbox_type == "langsmith":
+        from ..integrations.langsmith import LangSmithProvider
+
+        LangSmithProvider.validate_startup_config()

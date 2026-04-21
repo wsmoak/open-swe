@@ -6,6 +6,8 @@ import json
 import logging
 import os
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -40,6 +42,7 @@ from .utils.linear import post_linear_trace_comment
 from .utils.linear_team_repo_map import LINEAR_TEAM_TO_REPO
 from .utils.multimodal import dedupe_urls, extract_image_urls, fetch_image_block
 from .utils.repo import extract_repo_from_text
+from .utils.sandbox import validate_sandbox_startup_config
 from .utils.slack import (
     add_slack_reaction,
     fetch_slack_thread_messages,
@@ -55,7 +58,14 @@ from .utils.slack import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    validate_sandbox_startup_config()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 LINEAR_WEBHOOK_SECRET = os.environ.get("LINEAR_WEBHOOK_SECRET", "")
 GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
@@ -1325,7 +1335,7 @@ async def process_github_pr_comment(payload: dict[str, Any], event_type: str) ->
         logger.info("No comments found since last @open-swe tag for PR %s", pr_number)
         return
 
-    prompt = build_pr_prompt(comments, pr_url)
+    prompt = build_pr_prompt(comments, pr_url, repo_config=repo_config)
     await _trigger_or_queue_run(
         thread_id,
         prompt,

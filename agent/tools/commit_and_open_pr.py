@@ -168,14 +168,11 @@ def commit_and_open_pr(
 
         installation_token = asyncio.run(get_github_app_installation_token())
         if not installation_token:
-            installation_token = os.environ.get("GITHUB_TOKEN")
-        if not installation_token:
             return {
                 "success": False,
                 "error": "Failed to get GitHub App installation token",
                 "pr_url": None,
             }
-
         metadata = config.get("metadata", {})
         branch_name = metadata.get("branch_name")
         current_branch = git_current_branch(sandbox_backend, repo_dir)
@@ -215,7 +212,15 @@ def commit_and_open_pr(
                     "pr_url": None,
                 }
 
-        push_result = git_push(sandbox_backend, repo_dir, target_branch, installation_token)
+        installation_token = asyncio.run(get_github_app_installation_token())
+        if not installation_token:
+            return {
+                "success": False,
+                "error": "Failed to get GitHub App installation token",
+                "pr_url": None,
+            }
+
+        push_result = git_push(sandbox_backend, repo_dir, target_branch)
         if push_result.exit_code != 0:
             return {
                 "success": False,
@@ -235,6 +240,7 @@ def commit_and_open_pr(
                 head_branch=target_branch,
                 base_branch=base_branch,
                 body=pr_body,
+                assignee_login=user_identity.github_login if user_identity else None,
             )
         )
 
